@@ -1,0 +1,12 @@
+{
+  "name": "knxproto",
+  "version": "0.0.0",
+  "author": "Ole Krüger <knxproto-node@vprsm.de>",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "lib/index.js",
+  "devDependencies": {
+    "better-assert": "^1.0.2",
+    "mocha": "^3.2.0"
+  }
+}
