@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <base data-ice="baseUrl" href="../../">
+  <title data-ice="title">lib/index.js | API Document</title>
+  <link type="text/css" rel="stylesheet" href="css/style.css">
+  <link type="text/css" rel="stylesheet" href="css/prettify-tomorrow.css">
+  <script src="script/prettify/prettify.js"></script>
+  
+  
+  <script src="script/manual.js"></script>
+<link data-ice="userStyle" rel="stylesheet" href="user/css/0-custom-style.css">
+</head>
+<body class="layout-container" data-ice="rootContainer">
+
+<header>
+  <a href="./">Home</a>
+  
+  <a href="identifiers.html">Reference</a>
+  <a href="source.html">Source</a>
+  <a href="test.html" data-ice="testLink">Test</a>
+  
+  <div class="search-box">
+  <span>
+    <img src="./image/search.png">
+    <span class="search-input-edge"></span><input class="search-input"><span class="search-input-edge"></span>
+  </span>
+    <ul class="search-result"></ul>
+  </div>
+</header>
+
+<nav class="navigation" data-ice="nav"><div>
+  <ul>
+    
+  <li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/lib/index.js~HostInfo.html">HostInfo</a></span></span></li>
+</ul>
+</div>
+</nav>
+
+<div class="content" data-ice="content"><h1 data-ice="title">lib/index.js</h1>
+<pre class="source-code line-number raw-source-code"><code class="prettyprint linenums" data-ice="content">/* Copyright (C) 2017, Ole Kr&#xFC;ger &lt;ole@vprsm.de&gt; */
+
+&quot;use strict&quot;;
+
+const ip = require(&quot;ip&quot;);
+
+/// Extract information from a KNXnet/IP packet.
+function fromPacket(buffer) {
+	// Check header length
+	if (buffer[0] != 6)
+		throw new Error(&quot;Header length mismatch&quot;);
+
+	// Check header version
+	if (buffer[1] != 16)
+		throw new Error(&quot;Header version mismatch&quot;);
+
+	// Extract header fields
+	const service = buffer.readUInt16BE(2);
+	const length = buffer.readUInt16BE(4);
+
+	// Slice contents
+	if (length &lt;= 6)
+		return {service, payload: null};
+	else
+		return {service, payload: buffer.slice(6, length)};
+}
+
+/// Generate KNXnet/IP packet using the given service identifier and payload.
+function toPacket(service, payload) {
+	const length = 6 + payload.length;
+
+	// Make sure we can fit the payload size into the header field
+	if (length &gt;= 65535)
+		throw new Error(&quot;Content length exceeds 65535&quot;);
+
+	const buffer = Buffer.allocUnsafe(6 + payload.length);
+
+	// Fill header
+	buffer[0] = 6;
+	buffer[1] = 16;
+
+	buffer.writeUInt16BE(service, 2);
+	buffer.writeUInt16BE(length, 4);
+
+	// Append payload
+	payload.copy(buffer, 6);
+
+	return buffer;
+}
+
+/**
+ * Host information
+ *
+ * Represents the `Host Protocol Address Information`, which is structured as follows:
+ *
+ * | Octet | Field            | Description                    |
+ * |------:|:-----------------|:-------------------------------|
+ * |     0 | Structure length | Always 8                       |
+ * |     1 | Protocol         | 1 is UDP, 2 is TCP             |
+ * | 2 - 5 | IPv4 address     | Network-ordered representation |
+ * | 6 - 7 | Port number      | Network-ordered representation |
+ *
+ */
+class HostInfo {
+	/**
+	 * UDP protocol identifier
+	 */
+	static get UDP() { return 1; }
+
+	/**
+	 * TCP protocol identifier
+	 */
+	static get TCP() { return 2; }
+
+	/**
+	 * Extract a {@link HostInfo} instance from the given buffer and offset.
+	 *
+	 * @param {Buffer} buffer     - Input buffer
+	 * @param {number} [offset=0] - Input offset
+	 * @throws {Error} If given buffer is too small or buffer contents are invalid
+	 * @return {HostInfo}
+	 */
+	static fromBuffer(buffer, offset = 0) {
+		if ((buffer.length - offset) &lt; 8)
+			throw new Error(&quot;Given buffer is too small&quot;);
+
+		if (buffer[offset] != 8)
+			throw new Error(&quot;Host info structure length is invalid&quot;);
+
+		const protocol = buffer[offset + 1];
+
+		if (protocol &lt; 1 || protocol &gt; 2)
+			throw new Error(&quot;Host info protocol is out of range&quot;);
+
+		const address = buffer.readUInt32BE(offset + 2);
+		const port = buffer.readUInt16BE(offset + 6);
+
+		return new HostInfo(protocol, address, port);
+	}
+
+	/**
+	 * @param {number}        [protocol=UDP]    - Protocol identifier
+	 * @param {string|number} [address=0.0.0.0] - IPv4 address
+	 * @param {number}        [port=0]          - Port number
+	 * @throws {Error} If given address is not in IPv4 format
+	 */
+	constructor(protocol = HostInfo.UDP, address = 0, port = 0) {
+		this.protocol = protocol;
+		this.port = port;
+
+		switch (typeof(address)) {
+			case &quot;string&quot;:
+				if (ip.isV4Format(address))
+					this.address = ip.toLong(address);
+				else
+					throw new Error(&quot;Given address is not a IPv4 address&quot;);
+
+				break;
+
+			case &quot;number&quot;:
+				this.address = address;
+				break;
+
+			default:
+				this.address = 0;
+				break;
+		}
+	}
+
+	/**
+	 * Write {@link HostInfo} structure to the given buffer.
+	 *
+	 * @param {?Buffer} [buffer]   - Output buffer (allocates an appropriate buffer when ommited)
+	 * @param {number}  [offset=0] - Output offset
+	 * @returns {Buffer}
+	 */
+	toBuffer(buffer, offset = 0) {
+		if (buffer == null)
+			buffer = Buffer.allocUnsafe(8);
+
+		buffer[offset] = 8;
+		buffer[offset + 1] = this.protocol;
+
+		buffer.writeUInt32BE(this.address, offset + 2);
+		buffer.writeUInt16BE(this.port, offset + 6);
+
+		return buffer;
+	}
+
+	/**
+	 * Check if another {@link HostInfo} is equal to this one.
+	 *
+	 * @param {HostInfo} other
+	 * @returns {boolean}
+	 */
+	equals(other) {
+		if (this === other)
+			return true;
+
+		if (!(other instanceof HostInfo))
+			return false;
+
+		return (
+			other.protocol === this.protocol
+			&amp;&amp; other.address === this.address
+			&amp;&amp; other.port === this.port
+		);
+	}
+}
+
+module.exports = {
+	fromPacket,
+	toPacket,
+
+	HostInfo
+};
+</code></pre>
+
+</div>
+
+<footer class="footer">
+  Generated by <a href="https://esdoc.org">ESDoc<span data-ice="esdocVersion">(0.5.2)</span><img src="./image/esdoc-logo-mini-black.png"></a>
+</footer>
+
+<script src="script/search_index.js"></script>
+<script src="script/search.js"></script>
+<script src="script/pretty-print.js"></script>
+<script src="script/inherited-summary.js"></script>
+<script src="script/test-summary.js"></script>
+<script src="script/inner-link.js"></script>
+<script src="script/patch-for-local.js"></script>
+</body>
+</html>

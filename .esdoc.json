@@ -1,0 +1,11 @@
+{
+	"source": "./lib",
+	"destination": "./docs",
+	"test": {
+		"type": "mocha",
+		"source": "./tests"
+	},
+	"unexportIdentifier": true,
+	"undocumentIdentifier": false,
+	"styles": ["./docs/custom-style.css"]
+}
