@@ -6,6 +6,18 @@ window.esdocSearchIndex = [
     "class"
   ],
   [
+    "knxproto~frompacket",
+    "function/index.html#static-function-fromPacket",
+    "<span>fromPacket</span> <span class=\"search-result-import-path\">knxproto</span>",
+    "function"
+  ],
+  [
+    "knxproto~topacket",
+    "function/index.html#static-function-toPacket",
+    "<span>toPacket</span> <span class=\"search-result-import-path\">knxproto</span>",
+    "function"
+  ],
+  [
     "builtinexternal/ecmascriptexternal.js~array",
     "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array",
     "BuiltinExternal/ECMAScriptExternal.js~Array",

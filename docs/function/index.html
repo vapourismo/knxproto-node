@@ -10,6 +10,7 @@
   
   
   <script src="script/manual.js"></script>
+<link data-ice="userStyle" rel="stylesheet" href="user/css/0-custom-style.css">
 </head>
 <body class="layout-container" data-ice="rootContainer">
 
@@ -35,7 +36,6 @@
   <li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/lib/index.js~HostInfo.html">HostInfo</a></span></span></li>
 <li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-fromPacket">fromPacket</a></span></span></li>
 <li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-toPacket">toPacket</a></span></span></li>
-<li data-ice="doc"><span data-ice="kind" class="kind-variable">V</span><span data-ice="name"><span><a href="variable/index.html#static-variable-ip">ip</a></span></span></li>
 </ul>
 </div>
 </nav>
@@ -58,13 +58,14 @@
         <p>
           
           
-          <span data-ice="name"><span><a href="function/index.html#static-function-fromPacket">fromPacket</a></span></span><span data-ice="signature">(buffer: <span>*</span>): {&quot;service&quot;: <span>*</span>, &quot;payload&quot;: <span>*</span>}</span>
+          <span data-ice="name"><span><a href="function/index.html#static-function-fromPacket">fromPacket</a></span></span><span data-ice="signature">(buffer: <span>Buffer</span>): {service: <span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number">number</a></span>, payload: ?<span>Buffer</span>}</span>
         </p>
       </div>
       <div>
         
         
-        
+        <div data-ice="description"><p>Extract service identifier and payload from KNXnet/IP packet.</p>
+</div>
       </div>
     </td>
     <td>
@@ -85,13 +86,14 @@
         <p>
           
           
-          <span data-ice="name"><span><a href="function/index.html#static-function-toPacket">toPacket</a></span></span><span data-ice="signature">(service: <span>*</span>, payload: <span>*</span>): <span>*</span></span>
+          <span data-ice="name"><span><a href="function/index.html#static-function-toPacket">toPacket</a></span></span><span data-ice="signature">(service: <span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number">number</a></span>, payload: <span>Buffer</span>): <span>Buffer</span></span>
         </p>
       </div>
       <div>
         
         
-        
+        <div data-ice="description"><p>Generate a Buffer that contains a KNXnet/IP packet with the given service identifier and payload.</p>
+</div>
       </div>
     </td>
     <td>
@@ -112,18 +114,19 @@
     
     
     
-    <span data-ice="name">fromPacket</span><span data-ice="signature">(buffer: <span>*</span>): {&quot;service&quot;: <span>*</span>, &quot;payload&quot;: <span>*</span>}</span>
+    <span data-ice="name">fromPacket</span><span data-ice="signature">(buffer: <span>Buffer</span>): {service: <span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number">number</a></span>, payload: ?<span>Buffer</span>}</span>
     <span class="right-info">
       
       
-      <span data-ice="source"><span><a href="file/lib/index.js.html#lineNumber8">source</a></span></span>
+      <span data-ice="source"><span><a href="file/lib/index.js.html#lineNumber14">source</a></span></span>
     </span>
   </h3>
 
   
   
   
-  
+  <div data-ice="description"><p>Extract service identifier and payload from KNXnet/IP packet.</p>
+</div>
 
   
 
@@ -137,9 +140,10 @@
     
     <tr data-ice="property" data-depth="0">
       <td data-ice="name" data-depth="0">buffer</td>
-      <td data-ice="type"><span>*</span></td>
+      <td data-ice="type"><span>Buffer</span></td>
       <td data-ice="appendix"></td>
-      <td data-ice="description"></td>
+      <td data-ice="description"><p>Input buffer</p>
+</td>
     </tr>
 </tbody>
   </table>
@@ -151,7 +155,7 @@
     <table>
       <tbody>
         <tr>
-          <td class="return-type" data-ice="returnType">{&quot;service&quot;: <span>*</span>, &quot;payload&quot;: <span>*</span>}</td>
+          <td class="return-type" data-ice="returnType">{service: <span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number">number</a></span>, payload: ?<span>Buffer</span>}</td>
           
         </tr>
       </tbody>
@@ -164,7 +168,19 @@
 
   
 
-  
+  <div data-ice="throwWrap">
+    <h4>Throw:</h4>
+    <table>
+      <tbody>
+      
+      <tr class="throw" data-ice="throw">
+        <td><p data-ice="throwName"><span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error">Error</a></span></p></td>
+        <td data-ice="throwDesc"><p>If buffer contents are invalid</p>
+</td>
+      </tr>
+</tbody>
+    </table>
+  </div>
 
   
 
@@ -183,18 +199,19 @@
     
     
     
-    <span data-ice="name">toPacket</span><span data-ice="signature">(service: <span>*</span>, payload: <span>*</span>): <span>*</span></span>
+    <span data-ice="name">toPacket</span><span data-ice="signature">(service: <span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number">number</a></span>, payload: <span>Buffer</span>): <span>Buffer</span></span>
     <span class="right-info">
       
       
-      <span data-ice="source"><span><a href="file/lib/index.js.html#lineNumber29">source</a></span></span>
+      <span data-ice="source"><span><a href="file/lib/index.js.html#lineNumber38">source</a></span></span>
     </span>
   </h3>
 
   
   
   
-  
+  <div data-ice="description"><p>Generate a Buffer that contains a KNXnet/IP packet with the given service identifier and payload.</p>
+</div>
 
   
 
@@ -208,15 +225,17 @@
     
     <tr data-ice="property" data-depth="0">
       <td data-ice="name" data-depth="0">service</td>
-      <td data-ice="type"><span>*</span></td>
+      <td data-ice="type"><span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number">number</a></span></td>
       <td data-ice="appendix"></td>
-      <td data-ice="description"></td>
+      <td data-ice="description"><p>Service identifier</p>
+</td>
     </tr>
 <tr data-ice="property" data-depth="0">
       <td data-ice="name" data-depth="0">payload</td>
-      <td data-ice="type"><span>*</span></td>
+      <td data-ice="type"><span>Buffer</span></td>
       <td data-ice="appendix"></td>
-      <td data-ice="description"></td>
+      <td data-ice="description"><p>Packet payload</p>
+</td>
     </tr>
 </tbody>
   </table>
@@ -228,7 +247,7 @@
     <table>
       <tbody>
         <tr>
-          <td class="return-type" data-ice="returnType"><span>*</span></td>
+          <td class="return-type" data-ice="returnType"><span>Buffer</span></td>
           
         </tr>
       </tbody>
@@ -241,7 +260,19 @@
 
   
 
-  
+  <div data-ice="throwWrap">
+    <h4>Throw:</h4>
+    <table>
+      <tbody>
+      
+      <tr class="throw" data-ice="throw">
+        <td><p data-ice="throwName"><span><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error">Error</a></span></p></td>
+        <td data-ice="throwDesc"><p>If payload length exceeds 16-bit unsigned integer upper bound</p>
+</td>
+      </tr>
+</tbody>
+    </table>
+  </div>
 
   
 

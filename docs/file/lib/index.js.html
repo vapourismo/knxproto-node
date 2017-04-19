@@ -34,6 +34,8 @@
   <ul>
     
   <li data-ice="doc"><span data-ice="kind" class="kind-class">C</span><span data-ice="name"><span><a href="class/lib/index.js~HostInfo.html">HostInfo</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-fromPacket">fromPacket</a></span></span></li>
+<li data-ice="doc"><span data-ice="kind" class="kind-function">F</span><span data-ice="name"><span><a href="function/index.html#static-function-toPacket">toPacket</a></span></span></li>
 </ul>
 </div>
 </nav>
@@ -45,28 +47,37 @@
 
 const ip = require(&quot;ip&quot;);
 
-/// Extract information from a KNXnet/IP packet.
+/**
+ * Extract service identifier and payload from KNXnet/IP packet.
+ *
+ * @param {Buffer} buffer - Input buffer
+ * @throws {Error} If buffer contents are invalid
+ * @returns {{service: number, payload: ?Buffer}}
+ */
 function fromPacket(buffer) {
-	// Check header length
 	if (buffer[0] != 6)
 		throw new Error(&quot;Header length mismatch&quot;);
 
-	// Check header version
 	if (buffer[1] != 16)
 		throw new Error(&quot;Header version mismatch&quot;);
 
-	// Extract header fields
 	const service = buffer.readUInt16BE(2);
 	const length = buffer.readUInt16BE(4);
 
-	// Slice contents
 	if (length &lt;= 6)
 		return {service, payload: null};
 	else
 		return {service, payload: buffer.slice(6, length)};
 }
 
-/// Generate KNXnet/IP packet using the given service identifier and payload.
+/**
+ * Generate a Buffer that contains a KNXnet/IP packet with the given service identifier and payload.
+ *
+ * @param {number} service - Service identifier
+ * @param {Buffer} payload - Packet payload
+ * @throws {Error} If payload length exceeds 16-bit unsigned integer upper bound
+ * @returns {Buffer}
+ */
 function toPacket(service, payload) {
 	const length = 6 + payload.length;
 
@@ -76,14 +87,12 @@ function toPacket(service, payload) {
 
 	const buffer = Buffer.allocUnsafe(6 + payload.length);
 
-	// Fill header
 	buffer[0] = 6;
 	buffer[1] = 16;
 
 	buffer.writeUInt16BE(service, 2);
 	buffer.writeUInt16BE(length, 4);
 
-	// Append payload
 	payload.copy(buffer, 6);
 
 	return buffer;

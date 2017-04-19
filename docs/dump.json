@@ -3,7 +3,7 @@
     "__docId__": 0,
     "kind": "file",
     "name": "lib/index.js",
-    "content": "/* Copyright (C) 2017, Ole Krüger <ole@vprsm.de> */\n\n\"use strict\";\n\nconst ip = require(\"ip\");\n\n/// Extract information from a KNXnet/IP packet.\nfunction fromPacket(buffer) {\n\t// Check header length\n\tif (buffer[0] != 6)\n\t\tthrow new Error(\"Header length mismatch\");\n\n\t// Check header version\n\tif (buffer[1] != 16)\n\t\tthrow new Error(\"Header version mismatch\");\n\n\t// Extract header fields\n\tconst service = buffer.readUInt16BE(2);\n\tconst length = buffer.readUInt16BE(4);\n\n\t// Slice contents\n\tif (length <= 6)\n\t\treturn {service, payload: null};\n\telse\n\t\treturn {service, payload: buffer.slice(6, length)};\n}\n\n/// Generate KNXnet/IP packet using the given service identifier and payload.\nfunction toPacket(service, payload) {\n\tconst length = 6 + payload.length;\n\n\t// Make sure we can fit the payload size into the header field\n\tif (length >= 65535)\n\t\tthrow new Error(\"Content length exceeds 65535\");\n\n\tconst buffer = Buffer.allocUnsafe(6 + payload.length);\n\n\t// Fill header\n\tbuffer[0] = 6;\n\tbuffer[1] = 16;\n\n\tbuffer.writeUInt16BE(service, 2);\n\tbuffer.writeUInt16BE(length, 4);\n\n\t// Append payload\n\tpayload.copy(buffer, 6);\n\n\treturn buffer;\n}\n\n/**\n * Host information\n *\n * Represents the `Host Protocol Address Information`, which is structured as follows:\n *\n * | Octet | Field            | Description                    |\n * |------:|:-----------------|:-------------------------------|\n * |     0 | Structure length | Always 8                       |\n * |     1 | Protocol         | 1 is UDP, 2 is TCP             |\n * | 2 - 5 | IPv4 address     | Network-ordered representation |\n * | 6 - 7 | Port number      | Network-ordered representation |\n *\n */\nclass HostInfo {\n\t/**\n\t * UDP protocol identifier\n\t */\n\tstatic get UDP() { return 1; }\n\n\t/**\n\t * TCP protocol identifier\n\t */\n\tstatic get TCP() { return 2; }\n\n\t/**\n\t * Extract a {@link HostInfo} instance from the given buffer and offset.\n\t *\n\t * @param {Buffer} buffer     - Input buffer\n\t * @param {number} [offset=0] - Input offset\n\t * @throws {Error} If given buffer is too small or buffer contents are invalid\n\t * @return {HostInfo}\n\t */\n\tstatic fromBuffer(buffer, offset = 0) {\n\t\tif ((buffer.length - offset) < 8)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tif (buffer[offset] != 8)\n\t\t\tthrow new Error(\"Host info structure length is invalid\");\n\n\t\tconst protocol = buffer[offset + 1];\n\n\t\tif (protocol < 1 || protocol > 2)\n\t\t\tthrow new Error(\"Host info protocol is out of range\");\n\n\t\tconst address = buffer.readUInt32BE(offset + 2);\n\t\tconst port = buffer.readUInt16BE(offset + 6);\n\n\t\treturn new HostInfo(protocol, address, port);\n\t}\n\n\t/**\n\t * @param {number}        [protocol=UDP]    - Protocol identifier\n\t * @param {string|number} [address=0.0.0.0] - IPv4 address\n\t * @param {number}        [port=0]          - Port number\n\t * @throws {Error} If given address is not in IPv4 format\n\t */\n\tconstructor(protocol = HostInfo.UDP, address = 0, port = 0) {\n\t\tthis.protocol = protocol;\n\t\tthis.port = port;\n\n\t\tswitch (typeof(address)) {\n\t\t\tcase \"string\":\n\t\t\t\tif (ip.isV4Format(address))\n\t\t\t\t\tthis.address = ip.toLong(address);\n\t\t\t\telse\n\t\t\t\t\tthrow new Error(\"Given address is not a IPv4 address\");\n\n\t\t\t\tbreak;\n\n\t\t\tcase \"number\":\n\t\t\t\tthis.address = address;\n\t\t\t\tbreak;\n\n\t\t\tdefault:\n\t\t\t\tthis.address = 0;\n\t\t\t\tbreak;\n\t\t}\n\t}\n\n\t/**\n\t * Write {@link HostInfo} structure to the given buffer.\n\t *\n\t * @param {?Buffer} [buffer]   - Output buffer (allocates an appropriate buffer when ommited)\n\t * @param {number}  [offset=0] - Output offset\n\t * @returns {Buffer}\n\t */\n\ttoBuffer(buffer, offset = 0) {\n\t\tif (buffer == null)\n\t\t\tbuffer = Buffer.allocUnsafe(8);\n\n\t\tbuffer[offset] = 8;\n\t\tbuffer[offset + 1] = this.protocol;\n\n\t\tbuffer.writeUInt32BE(this.address, offset + 2);\n\t\tbuffer.writeUInt16BE(this.port, offset + 6);\n\n\t\treturn buffer;\n\t}\n\n\t/**\n\t * Check if another {@link HostInfo} is equal to this one.\n\t *\n\t * @param {HostInfo} other\n\t * @returns {boolean}\n\t */\n\tequals(other) {\n\t\tif (this === other)\n\t\t\treturn true;\n\n\t\tif (!(other instanceof HostInfo))\n\t\t\treturn false;\n\n\t\treturn (\n\t\t\tother.protocol === this.protocol\n\t\t\t&& other.address === this.address\n\t\t\t&& other.port === this.port\n\t\t);\n\t}\n}\n\nmodule.exports = {\n\tfromPacket,\n\ttoPacket,\n\n\tHostInfo\n};\n",
+    "content": "/* Copyright (C) 2017, Ole Krüger <ole@vprsm.de> */\n\n\"use strict\";\n\nconst ip = require(\"ip\");\n\n/**\n * Extract service identifier and payload from KNXnet/IP packet.\n *\n * @param {Buffer} buffer - Input buffer\n * @throws {Error} If buffer contents are invalid\n * @returns {{service: number, payload: ?Buffer}}\n */\nfunction fromPacket(buffer) {\n\tif (buffer[0] != 6)\n\t\tthrow new Error(\"Header length mismatch\");\n\n\tif (buffer[1] != 16)\n\t\tthrow new Error(\"Header version mismatch\");\n\n\tconst service = buffer.readUInt16BE(2);\n\tconst length = buffer.readUInt16BE(4);\n\n\tif (length <= 6)\n\t\treturn {service, payload: null};\n\telse\n\t\treturn {service, payload: buffer.slice(6, length)};\n}\n\n/**\n * Generate a Buffer that contains a KNXnet/IP packet with the given service identifier and payload.\n *\n * @param {number} service - Service identifier\n * @param {Buffer} payload - Packet payload\n * @throws {Error} If payload length exceeds 16-bit unsigned integer upper bound\n * @returns {Buffer}\n */\nfunction toPacket(service, payload) {\n\tconst length = 6 + payload.length;\n\n\t// Make sure we can fit the payload size into the header field\n\tif (length >= 65535)\n\t\tthrow new Error(\"Content length exceeds 65535\");\n\n\tconst buffer = Buffer.allocUnsafe(6 + payload.length);\n\n\tbuffer[0] = 6;\n\tbuffer[1] = 16;\n\n\tbuffer.writeUInt16BE(service, 2);\n\tbuffer.writeUInt16BE(length, 4);\n\n\tpayload.copy(buffer, 6);\n\n\treturn buffer;\n}\n\n/**\n * Host information\n *\n * Represents the `Host Protocol Address Information`, which is structured as follows:\n *\n * | Octet | Field            | Description                    |\n * |------:|:-----------------|:-------------------------------|\n * |     0 | Structure length | Always 8                       |\n * |     1 | Protocol         | 1 is UDP, 2 is TCP             |\n * | 2 - 5 | IPv4 address     | Network-ordered representation |\n * | 6 - 7 | Port number      | Network-ordered representation |\n *\n */\nclass HostInfo {\n\t/**\n\t * UDP protocol identifier\n\t */\n\tstatic get UDP() { return 1; }\n\n\t/**\n\t * TCP protocol identifier\n\t */\n\tstatic get TCP() { return 2; }\n\n\t/**\n\t * Extract a {@link HostInfo} instance from the given buffer and offset.\n\t *\n\t * @param {Buffer} buffer     - Input buffer\n\t * @param {number} [offset=0] - Input offset\n\t * @throws {Error} If given buffer is too small or buffer contents are invalid\n\t * @return {HostInfo}\n\t */\n\tstatic fromBuffer(buffer, offset = 0) {\n\t\tif ((buffer.length - offset) < 8)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tif (buffer[offset] != 8)\n\t\t\tthrow new Error(\"Host info structure length is invalid\");\n\n\t\tconst protocol = buffer[offset + 1];\n\n\t\tif (protocol < 1 || protocol > 2)\n\t\t\tthrow new Error(\"Host info protocol is out of range\");\n\n\t\tconst address = buffer.readUInt32BE(offset + 2);\n\t\tconst port = buffer.readUInt16BE(offset + 6);\n\n\t\treturn new HostInfo(protocol, address, port);\n\t}\n\n\t/**\n\t * @param {number}        [protocol=UDP]    - Protocol identifier\n\t * @param {string|number} [address=0.0.0.0] - IPv4 address\n\t * @param {number}        [port=0]          - Port number\n\t * @throws {Error} If given address is not in IPv4 format\n\t */\n\tconstructor(protocol = HostInfo.UDP, address = 0, port = 0) {\n\t\tthis.protocol = protocol;\n\t\tthis.port = port;\n\n\t\tswitch (typeof(address)) {\n\t\t\tcase \"string\":\n\t\t\t\tif (ip.isV4Format(address))\n\t\t\t\t\tthis.address = ip.toLong(address);\n\t\t\t\telse\n\t\t\t\t\tthrow new Error(\"Given address is not a IPv4 address\");\n\n\t\t\t\tbreak;\n\n\t\t\tcase \"number\":\n\t\t\t\tthis.address = address;\n\t\t\t\tbreak;\n\n\t\t\tdefault:\n\t\t\t\tthis.address = 0;\n\t\t\t\tbreak;\n\t\t}\n\t}\n\n\t/**\n\t * Write {@link HostInfo} structure to the given buffer.\n\t *\n\t * @param {?Buffer} [buffer]   - Output buffer (allocates an appropriate buffer when ommited)\n\t * @param {number}  [offset=0] - Output offset\n\t * @returns {Buffer}\n\t */\n\ttoBuffer(buffer, offset = 0) {\n\t\tif (buffer == null)\n\t\t\tbuffer = Buffer.allocUnsafe(8);\n\n\t\tbuffer[offset] = 8;\n\t\tbuffer[offset + 1] = this.protocol;\n\n\t\tbuffer.writeUInt32BE(this.address, offset + 2);\n\t\tbuffer.writeUInt16BE(this.port, offset + 6);\n\n\t\treturn buffer;\n\t}\n\n\t/**\n\t * Check if another {@link HostInfo} is equal to this one.\n\t *\n\t * @param {HostInfo} other\n\t * @returns {boolean}\n\t */\n\tequals(other) {\n\t\tif (this === other)\n\t\t\treturn true;\n\n\t\tif (!(other instanceof HostInfo))\n\t\t\treturn false;\n\n\t\treturn (\n\t\t\tother.protocol === this.protocol\n\t\t\t&& other.address === this.address\n\t\t\t&& other.port === this.port\n\t\t);\n\t}\n}\n\nmodule.exports = {\n\tfromPacket,\n\ttoPacket,\n\n\tHostInfo\n};\n",
     "static": true,
     "longname": "lib/index.js",
     "access": null,
@@ -49,28 +49,42 @@
     "export": false,
     "importPath": "knxproto",
     "importStyle": null,
-    "description": null,
-    "lineNumber": 8,
-    "undocument": true,
+    "description": "Extract service identifier and payload from KNXnet/IP packet.",
+    "lineNumber": 14,
     "unknown": [
       {
-        "tagName": "@_undocument",
-        "tagValue": ""
+        "tagName": "@returns",
+        "tagValue": "{{service: number, payload: ?Buffer}}"
       }
     ],
     "params": [
       {
-        "name": "buffer",
+        "nullable": null,
         "types": [
-          "*"
-        ]
+          "Buffer"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "buffer",
+        "description": "Input buffer"
       }
     ],
     "return": {
+      "nullable": null,
       "types": [
-        "{\"service\": *, \"payload\": *}"
-      ]
-    }
+        "{service: number, payload: ?Buffer}"
+      ],
+      "spread": false,
+      "description": ""
+    },
+    "throws": [
+      {
+        "types": [
+          "Error"
+        ],
+        "description": "If buffer contents are invalid"
+      }
+    ]
   },
   {
     "__docId__": 3,
@@ -85,34 +99,52 @@
     "export": false,
     "importPath": "knxproto",
     "importStyle": null,
-    "description": null,
-    "lineNumber": 29,
-    "undocument": true,
+    "description": "Generate a Buffer that contains a KNXnet/IP packet with the given service identifier and payload.",
+    "lineNumber": 38,
     "unknown": [
       {
-        "tagName": "@_undocument",
-        "tagValue": ""
+        "tagName": "@returns",
+        "tagValue": "{Buffer}"
       }
     ],
     "params": [
       {
-        "name": "service",
+        "nullable": null,
         "types": [
-          "*"
-        ]
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "service",
+        "description": "Service identifier"
       },
       {
-        "name": "payload",
+        "nullable": null,
         "types": [
-          "*"
-        ]
+          "Buffer"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "payload",
+        "description": "Packet payload"
       }
     ],
     "return": {
+      "nullable": null,
       "types": [
-        "*"
-      ]
-    }
+        "Buffer"
+      ],
+      "spread": false,
+      "description": ""
+    },
+    "throws": [
+      {
+        "types": [
+          "Error"
+        ],
+        "description": "If payload length exceeds 16-bit unsigned integer upper bound"
+      }
+    ]
   },
   {
     "__docId__": 4,
@@ -126,7 +158,7 @@
     "importPath": "knxproto",
     "importStyle": null,
     "description": "Host information\n\nRepresents the `Host Protocol Address Information`, which is structured as follows:\n\n| Octet | Field            | Description                    |\n|------:|:-----------------|:-------------------------------|\n|     0 | Structure length | Always 8                       |\n|     1 | Protocol         | 1 is UDP, 2 is TCP             |\n| 2 - 5 | IPv4 address     | Network-ordered representation |\n| 6 - 7 | Port number      | Network-ordered representation |",
-    "lineNumber": 64,
+    "lineNumber": 71,
     "interface": false
   },
   {
@@ -140,7 +172,7 @@
     "longname": "lib/index.js~HostInfo.UDP",
     "access": null,
     "description": "UDP protocol identifier",
-    "lineNumber": 68,
+    "lineNumber": 75,
     "type": {
       "types": [
         "number"
@@ -158,7 +190,7 @@
     "longname": "lib/index.js~HostInfo.TCP",
     "access": null,
     "description": "TCP protocol identifier",
-    "lineNumber": 73,
+    "lineNumber": 80,
     "type": {
       "types": [
         "number"
@@ -176,7 +208,7 @@
     "longname": "lib/index.js~HostInfo.fromBuffer",
     "access": null,
     "description": "Extract a {@link HostInfo} instance from the given buffer and offset.",
-    "lineNumber": 83,
+    "lineNumber": 90,
     "params": [
       {
         "nullable": null,
@@ -229,7 +261,7 @@
     "longname": "lib/index.js~HostInfo#constructor",
     "access": null,
     "description": "",
-    "lineNumber": 107,
+    "lineNumber": 114,
     "params": [
       {
         "nullable": null,
@@ -287,7 +319,7 @@
     "longname": "lib/index.js~HostInfo#protocol",
     "access": null,
     "description": null,
-    "lineNumber": 108,
+    "lineNumber": 115,
     "undocument": true,
     "unknown": [
       {
@@ -310,7 +342,7 @@
     "longname": "lib/index.js~HostInfo#port",
     "access": null,
     "description": null,
-    "lineNumber": 109,
+    "lineNumber": 116,
     "undocument": true,
     "unknown": [
       {
@@ -333,7 +365,7 @@
     "longname": "lib/index.js~HostInfo#address",
     "access": null,
     "description": null,
-    "lineNumber": 114,
+    "lineNumber": 121,
     "undocument": true,
     "unknown": [
       {
@@ -356,7 +388,7 @@
     "longname": "lib/index.js~HostInfo#address",
     "access": null,
     "description": null,
-    "lineNumber": 121,
+    "lineNumber": 128,
     "undocument": true,
     "unknown": [
       {
@@ -379,7 +411,7 @@
     "longname": "lib/index.js~HostInfo#address",
     "access": null,
     "description": null,
-    "lineNumber": 125,
+    "lineNumber": 132,
     "undocument": true,
     "unknown": [
       {
@@ -404,7 +436,7 @@
     "longname": "lib/index.js~HostInfo#toBuffer",
     "access": null,
     "description": "Write {@link HostInfo} structure to the given buffer.",
-    "lineNumber": 137,
+    "lineNumber": 144,
     "unknown": [
       {
         "tagName": "@returns",
@@ -455,7 +487,7 @@
     "longname": "lib/index.js~HostInfo#equals",
     "access": null,
     "description": "Check if another {@link HostInfo} is equal to this one.",
-    "lineNumber": 156,
+    "lineNumber": 163,
     "unknown": [
       {
         "tagName": "@returns",
