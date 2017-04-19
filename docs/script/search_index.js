@@ -1,8 +1,26 @@
 window.esdocSearchIndex = [
   [
+    "knxproto~connectionrequest",
+    "class/lib/index.js~ConnectionRequest.html",
+    "<span>ConnectionRequest</span> <span class=\"search-result-import-path\">knxproto</span>",
+    "class"
+  ],
+  [
+    "knxproto~connectionresponse",
+    "class/lib/index.js~ConnectionResponse.html",
+    "<span>ConnectionResponse</span> <span class=\"search-result-import-path\">knxproto</span>",
+    "class"
+  ],
+  [
     "knxproto~hostinfo",
     "class/lib/index.js~HostInfo.html",
     "<span>HostInfo</span> <span class=\"search-result-import-path\">knxproto</span>",
+    "class"
+  ],
+  [
+    "knxproto~packet",
+    "class/lib/index.js~Packet.html",
+    "<span>Packet</span> <span class=\"search-result-import-path\">knxproto</span>",
     "class"
   ],
   [
@@ -354,6 +372,42 @@ window.esdocSearchIndex = [
     "file"
   ],
   [
+    "lib/index.js~connectionrequest#buffersize",
+    "class/lib/index.js~ConnectionRequest.html#instance-get-bufferSize",
+    "lib/index.js~ConnectionRequest#bufferSize",
+    "member"
+  ],
+  [
+    "lib/index.js~connectionrequest#constructor",
+    "class/lib/index.js~ConnectionRequest.html#instance-constructor-constructor",
+    "lib/index.js~ConnectionRequest#constructor",
+    "method"
+  ],
+  [
+    "lib/index.js~connectionrequest#service",
+    "class/lib/index.js~ConnectionRequest.html#instance-get-service",
+    "lib/index.js~ConnectionRequest#service",
+    "member"
+  ],
+  [
+    "lib/index.js~connectionrequest#tobuffer",
+    "class/lib/index.js~ConnectionRequest.html#instance-method-toBuffer",
+    "lib/index.js~ConnectionRequest#toBuffer",
+    "method"
+  ],
+  [
+    "lib/index.js~connectionresponse#constructor",
+    "class/lib/index.js~ConnectionResponse.html#instance-constructor-constructor",
+    "lib/index.js~ConnectionResponse#constructor",
+    "method"
+  ],
+  [
+    "lib/index.js~connectionresponse.frombuffer",
+    "class/lib/index.js~ConnectionResponse.html#static-method-fromBuffer",
+    "lib/index.js~ConnectionResponse.fromBuffer",
+    "method"
+  ],
+  [
     "lib/index.js~hostinfo#constructor",
     "class/lib/index.js~HostInfo.html#instance-constructor-constructor",
     "lib/index.js~HostInfo#constructor",
@@ -387,6 +441,24 @@ window.esdocSearchIndex = [
     "lib/index.js~hostinfo.frombuffer",
     "class/lib/index.js~HostInfo.html#static-method-fromBuffer",
     "lib/index.js~HostInfo.fromBuffer",
+    "method"
+  ],
+  [
+    "lib/index.js~packet#constructor",
+    "class/lib/index.js~Packet.html#instance-constructor-constructor",
+    "lib/index.js~Packet#constructor",
+    "method"
+  ],
+  [
+    "lib/index.js~packet#tobuffer",
+    "class/lib/index.js~Packet.html#instance-method-toBuffer",
+    "lib/index.js~Packet#toBuffer",
+    "method"
+  ],
+  [
+    "lib/index.js~packet.frombuffer",
+    "class/lib/index.js~Packet.html#static-method-fromBuffer",
+    "lib/index.js~Packet.fromBuffer",
     "method"
   ]
 ]

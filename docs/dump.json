@@ -3,7 +3,7 @@
     "__docId__": 0,
     "kind": "file",
     "name": "lib/index.js",
-    "content": "/* Copyright (C) 2017, Ole Krüger <ole@vprsm.de> */\n\n\"use strict\";\n\nconst ip = require(\"ip\");\n\n/**\n * Extract service identifier and payload from KNXnet/IP packet.\n *\n * @param {Buffer} buffer - Input buffer\n * @throws {Error} If buffer contents are invalid\n * @returns {{service: number, payload: ?Buffer}}\n */\nfunction fromPacket(buffer) {\n\tif (buffer[0] != 6)\n\t\tthrow new Error(\"Header length mismatch\");\n\n\tif (buffer[1] != 16)\n\t\tthrow new Error(\"Header version mismatch\");\n\n\tconst service = buffer.readUInt16BE(2);\n\tconst length = buffer.readUInt16BE(4);\n\n\tif (length <= 6)\n\t\treturn {service, payload: null};\n\telse\n\t\treturn {service, payload: buffer.slice(6, length)};\n}\n\n/**\n * Generate a Buffer that contains a KNXnet/IP packet with the given service identifier and payload.\n *\n * @param {number} service - Service identifier\n * @param {Buffer} payload - Packet payload\n * @throws {Error} If payload length exceeds 16-bit unsigned integer upper bound\n * @returns {Buffer}\n */\nfunction toPacket(service, payload) {\n\tconst length = 6 + payload.length;\n\n\t// Make sure we can fit the payload size into the header field\n\tif (length >= 65535)\n\t\tthrow new Error(\"Content length exceeds 65535\");\n\n\tconst buffer = Buffer.allocUnsafe(6 + payload.length);\n\n\tbuffer[0] = 6;\n\tbuffer[1] = 16;\n\n\tbuffer.writeUInt16BE(service, 2);\n\tbuffer.writeUInt16BE(length, 4);\n\n\tpayload.copy(buffer, 6);\n\n\treturn buffer;\n}\n\n/**\n * Host information\n *\n * Represents the `Host Protocol Address Information`, which is structured as follows:\n *\n * | Octet | Field            | Description                    |\n * |------:|:-----------------|:-------------------------------|\n * |     0 | Structure length | Always 8                       |\n * |     1 | Protocol         | 1 is UDP, 2 is TCP             |\n * | 2 - 5 | IPv4 address     | Network-ordered representation |\n * | 6 - 7 | Port number      | Network-ordered representation |\n *\n */\nclass HostInfo {\n\t/**\n\t * UDP protocol identifier\n\t */\n\tstatic get UDP() { return 1; }\n\n\t/**\n\t * TCP protocol identifier\n\t */\n\tstatic get TCP() { return 2; }\n\n\t/**\n\t * Extract a {@link HostInfo} instance from the given buffer and offset.\n\t *\n\t * @param {Buffer} buffer     - Input buffer\n\t * @param {number} [offset=0] - Input offset\n\t * @throws {Error} If given buffer is too small or buffer contents are invalid\n\t * @return {HostInfo}\n\t */\n\tstatic fromBuffer(buffer, offset = 0) {\n\t\tif ((buffer.length - offset) < 8)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tif (buffer[offset] != 8)\n\t\t\tthrow new Error(\"Host info structure length is invalid\");\n\n\t\tconst protocol = buffer[offset + 1];\n\n\t\tif (protocol < 1 || protocol > 2)\n\t\t\tthrow new Error(\"Host info protocol is out of range\");\n\n\t\tconst address = buffer.readUInt32BE(offset + 2);\n\t\tconst port = buffer.readUInt16BE(offset + 6);\n\n\t\treturn new HostInfo(protocol, address, port);\n\t}\n\n\t/**\n\t * @param {number}        [protocol=UDP]    - Protocol identifier\n\t * @param {string|number} [address=0.0.0.0] - IPv4 address\n\t * @param {number}        [port=0]          - Port number\n\t * @throws {Error} If given address is not in IPv4 format\n\t */\n\tconstructor(protocol = HostInfo.UDP, address = 0, port = 0) {\n\t\tthis.protocol = protocol;\n\t\tthis.port = port;\n\n\t\tswitch (typeof(address)) {\n\t\t\tcase \"string\":\n\t\t\t\tif (ip.isV4Format(address))\n\t\t\t\t\tthis.address = ip.toLong(address);\n\t\t\t\telse\n\t\t\t\t\tthrow new Error(\"Given address is not a IPv4 address\");\n\n\t\t\t\tbreak;\n\n\t\t\tcase \"number\":\n\t\t\t\tthis.address = address;\n\t\t\t\tbreak;\n\n\t\t\tdefault:\n\t\t\t\tthis.address = 0;\n\t\t\t\tbreak;\n\t\t}\n\t}\n\n\t/**\n\t * Write {@link HostInfo} structure to the given buffer.\n\t *\n\t * @param {?Buffer} [buffer]   - Output buffer (allocates an appropriate buffer when ommited)\n\t * @param {number}  [offset=0] - Output offset\n\t * @returns {Buffer}\n\t */\n\ttoBuffer(buffer, offset = 0) {\n\t\tif (buffer == null)\n\t\t\tbuffer = Buffer.allocUnsafe(8);\n\n\t\tbuffer[offset] = 8;\n\t\tbuffer[offset + 1] = this.protocol;\n\n\t\tbuffer.writeUInt32BE(this.address, offset + 2);\n\t\tbuffer.writeUInt16BE(this.port, offset + 6);\n\n\t\treturn buffer;\n\t}\n\n\t/**\n\t * Check if another {@link HostInfo} is equal to this one.\n\t *\n\t * @param {HostInfo} other\n\t * @returns {boolean}\n\t */\n\tequals(other) {\n\t\tif (this === other)\n\t\t\treturn true;\n\n\t\tif (!(other instanceof HostInfo))\n\t\t\treturn false;\n\n\t\treturn (\n\t\t\tother.protocol === this.protocol\n\t\t\t&& other.address === this.address\n\t\t\t&& other.port === this.port\n\t\t);\n\t}\n}\n\nmodule.exports = {\n\tfromPacket,\n\ttoPacket,\n\n\tHostInfo\n};\n",
+    "content": "/* Copyright (C) 2017, Ole Krüger <ole@vprsm.de> */\n\n\"use strict\";\n\nconst ip = require(\"ip\");\n\n/**\n * Extract service identifier and payload from KNXnet/IP packet.\n *\n * @param {Buffer} buffer - Input buffer\n * @throws {Error} If buffer contents are invalid\n * @returns {{service: number, payload: ?Buffer}}\n */\nfunction fromPacket(buffer) {\n\tif (buffer[0] != 6)\n\t\tthrow new Error(\"Header length mismatch\");\n\n\tif (buffer[1] != 16)\n\t\tthrow new Error(\"Header version mismatch\");\n\n\tconst service = buffer.readUInt16BE(2);\n\tconst length = buffer.readUInt16BE(4);\n\n\tif (length <= 6)\n\t\treturn {service, payload: null};\n\telse\n\t\treturn {service, payload: buffer.slice(6, length)};\n}\n\n/**\n * Generate a Buffer that contains a KNXnet/IP packet with the given service identifier and payload.\n *\n * @param {number} service - Service identifier\n * @param {Buffer} payload - Packet payload\n * @throws {Error} If payload length exceeds 16-bit unsigned integer upper bound\n * @returns {Buffer}\n */\nfunction toPacket(service, payload) {\n\tconst length = 6 + payload.length;\n\n\t// Make sure we can fit the payload size into the header field\n\tif (length >= 65535)\n\t\tthrow new Error(\"Content length exceeds 65535\");\n\n\tconst buffer = Buffer.allocUnsafe(6 + payload.length);\n\n\tbuffer[0] = 6;\n\tbuffer[1] = 16;\n\n\tbuffer.writeUInt16BE(service, 2);\n\tbuffer.writeUInt16BE(length, 4);\n\n\tpayload.copy(buffer, 6);\n\n\treturn buffer;\n}\n\n/**\n * KNXnet/IP packet\n *\n * Represents an entire packet, which is structured as follows:\n *\n * | Octet | Field                   | Description                                               |\n * |------:|:------------------------|:----------------------------------------------------------|\n * |     0 | Header structure length | Always 6                                                  |\n * |     1 | Protocol version        | Always 16                                                 |\n * | 2 - 3 | Service identifier      | Describes which kind of payload you can expect            |\n * | 4 - 5 | Entire packet length    | Length of the entire packet, including header and payload |\n * | 6 - n | Payload                 | Contains the payload that matches the services identifier |\n *\n */\nclass Packet {\n\t/**\n\t * Extract a KNXnet/IP packet from the given buffer.\n\t *\n\t * @param {Buffer} buffer     - Input buffer\n\t * @param {number} [offset=0] - Input offset\n\t * @throws {Error} If given buffer is too small or its contents are invalid\n\t * @returns {Packet}\n\t */\n\tstatic fromBuffer(buffer, offset = 0) {\n\t\tif ((buffer.length - offset) < 6)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tif (buffer[0] != 6)\n\t\t\tthrow new Error(\"Header length mismatch\");\n\n\t\tif (buffer[1] != 16)\n\t\t\tthrow new Error(\"Header version mismatch\");\n\n\t\tconst service = buffer.readUInt16BE(2);\n\t\tswitch (service) {\n\t\t\t// Connection response\n\t\t\tcase 0x0206:\n\t\t\t\treturn new Packet(ConnectionResponse.fromBuffer(buffer, 6));\n\t\t}\n\t}\n\n\t/**\n\t * @param {number} service - Service identifier\n\t * @param {Object} payload - Packet payload\n\t */\n\tconstructor(payload) {\n\t\tthis.payload = payload;\n\t}\n\n\t/**\n\t * Write KNXnet/IP packet including its payload to the given buffer.\n\t *\n\t * @param {?Buffer} [buffer]   - Output buffer (allocates an appropriate buffer when omitted)\n\t * @param {number}  [offset=0] - Output offset\n\t * @throws {Error} If payload is too large or the given buffer is too small\n\t * @returns {Buffer}\n\t */\n\ttoBuffer(buffer, offset = 0) {\n\t\tconst entireLength = 6 + this.payload.bufferSize;\n\n\t\tif (entireLength > 65535)\n\t\t\tthrow new Error(\"Combined packet length exceeds 16-bit unsigned integer upper bound\");\n\n\t\tif (buffer == null)\n\t\t\tbuffer = Buffer.alloc(entireLength + offset);\n\t\telse if ((buffer.length - offset) < entireLength)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tbuffer[offset] = 6;\n\t\tbuffer[offset + 1] = 16;\n\n\t\tbuffer.writeUInt16BE(this.payload.service, offset + 2);\n\t\tbuffer.writeUInt16BE(entireLength, offset + 4);\n\n\t\tthis.payload.toBuffer(buffer, offset + 6);\n\n\t\treturn buffer;\n\t}\n}\n\n/**\n * Host information\n *\n * Represents the `Host Protocol Address Information`, which is structured as follows:\n *\n * | Octet | Field            | Description                    |\n * |------:|:-----------------|:-------------------------------|\n * |     0 | Structure length | Always 8                       |\n * |     1 | Protocol         | 1 is UDP, 2 is TCP             |\n * | 2 - 5 | IPv4 address     | Network-ordered representation |\n * | 6 - 7 | Port number      | Network-ordered representation |\n *\n */\nclass HostInfo {\n\t/**\n\t * UDP protocol identifier\n\t */\n\tstatic get UDP() { return 1; }\n\n\t/**\n\t * TCP protocol identifier\n\t */\n\tstatic get TCP() { return 2; }\n\n\t/**\n\t * Extract a {@link HostInfo} instance from the given buffer and offset.\n\t *\n\t * @param {Buffer} buffer     - Input buffer\n\t * @param {number} [offset=0] - Input offset\n\t * @throws {Error} If given buffer is too small or buffer contents are invalid\n\t * @return {HostInfo}\n\t */\n\tstatic fromBuffer(buffer, offset = 0) {\n\t\tif ((buffer.length - offset) < 8)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tif (buffer[offset] != 8)\n\t\t\tthrow new Error(\"Host info structure length is invalid\");\n\n\t\tconst protocol = buffer[offset + 1];\n\n\t\tif (protocol < 1 || protocol > 2)\n\t\t\tthrow new Error(\"Host info protocol is out of range\");\n\n\t\tconst address = buffer.readUInt32BE(offset + 2);\n\t\tconst port = buffer.readUInt16BE(offset + 6);\n\n\t\treturn new HostInfo(protocol, address, port);\n\t}\n\n\t/**\n\t * @param {number}        [protocol=UDP]    - Protocol identifier\n\t * @param {string|number} [address=0.0.0.0] - IPv4 address\n\t * @param {number}        [port=0]          - Port number\n\t * @throws {Error} If given address is not in IPv4 format\n\t */\n\tconstructor(protocol = HostInfo.UDP, address = 0, port = 0) {\n\t\tthis.protocol = protocol;\n\t\tthis.port = port;\n\n\t\tswitch (typeof(address)) {\n\t\t\tcase \"string\":\n\t\t\t\tif (ip.isV4Format(address))\n\t\t\t\t\tthis.address = ip.toLong(address);\n\t\t\t\telse\n\t\t\t\t\tthrow new Error(\"Given address is not a IPv4 address\");\n\n\t\t\t\tbreak;\n\n\t\t\tcase \"number\":\n\t\t\t\tthis.address = address;\n\t\t\t\tbreak;\n\n\t\t\tdefault:\n\t\t\t\tthis.address = 0;\n\t\t\t\tbreak;\n\t\t}\n\t}\n\n\t/**\n\t * Write {@link HostInfo} structure to the given buffer.\n\t *\n\t * @param {?Buffer} [buffer]   - Output buffer (allocates an appropriate buffer when omitted)\n\t * @param {number}  [offset=0] - Output offset\n\t * @throws {Error} If given buffer is too small\n\t * @returns {Buffer}\n\t */\n\ttoBuffer(buffer, offset = 0) {\n\t\tif (buffer == null)\n\t\t\tbuffer = Buffer.alloc(8 + offset);\n\t\telse if ((buffer.length - offset) < 8)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tbuffer[offset] = 8;\n\t\tbuffer[offset + 1] = this.protocol;\n\n\t\tbuffer.writeUInt32BE(this.address, offset + 2);\n\t\tbuffer.writeUInt16BE(this.port, offset + 6);\n\n\t\treturn buffer;\n\t}\n\n\t/**\n\t * Check if another {@link HostInfo} is equal to this one.\n\t *\n\t * @param {HostInfo} other\n\t * @returns {boolean}\n\t */\n\tequals(other) {\n\t\tif (this === other)\n\t\t\treturn true;\n\n\t\tif (!(other instanceof HostInfo))\n\t\t\treturn false;\n\n\t\treturn (\n\t\t\tother.protocol === this.protocol\n\t\t\t&& other.address === this.address\n\t\t\t&& other.port === this.port\n\t\t);\n\t}\n}\n\n/**\n * Connection request\n */\nclass ConnectionRequest {\n\t/**\n\t * @param {HostInfo} [control] - Control host information\n\t * @param {HostInfo} [tunnel]  - Tunnel host information\n\t */\n\tconstructor(control = new HostInfo(), tunnel = new HostInfo()) {\n\t\tthis.control = control;\n\t\tthis.tunnel = tunnel;\n\t}\n\n\t/**\n\t * Write {@link ConnectionRequest} structure to the given buffer.\n\t *\n\t * @param {?Buffer} [buffer]   - Output buffer (allocates an appropriate buffer when omitted)\n\t * @param {number}  [offset=0] - Output offset\n\t * @throws {Error} If given buffer is too small\n\t * @returns {Buffer}\n\t */\n\ttoBuffer(buffer, offset = 0) {\n\t\tif (buffer == null)\n\t\t\tbuffer = Buffer.alloc(20 + offset);\n\t\telse if ((buffer.length - offset) < 20)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tthis.control.toBuffer(buffer, offset);\n\t\tthis.control.toBuffer(buffer, offset + 8);\n\n\t\t// Connection request information are static, we always tunnel\n\t\tbuffer[offset + 16] = 4;\n\t\tbuffer[offset + 17] = 4;\n\t\tbuffer[offset + 18] = 2;\n\t\tbuffer[offset + 19] = 0;\n\n\t\treturn buffer;\n\t}\n\n\t/**\n\t * Minimum number of bytes required to serialize a connection request\n\t */\n\tget bufferSize() {\n\t\treturn 20;\n\t}\n\n\t/**\n\t * Service identifier\n\t */\n\tget service() {\n\t\treturn 0x0205;\n\t}\n}\n\n/**\n * Connection response\n */\nclass ConnectionResponse {\n\t/**\n\t * Extract a {@link ConnectionResponse} from the given buffer.\n\t *\n\t * @param {Buffer} buffer     - Input buffer\n\t * @param {number} [offset=0] - Input offset\n\t * @throws {Error} If buffer content is invalid\n\t */\n\tstatic fromBuffer(buffer, offset = 0) {\n\t\tif ((buffer.length - offset) < 14)\n\t\t\tthrow new Error(\"Given buffer is too small\");\n\n\t\tconst channel = buffer[offset];\n\t\tconst status = buffer[offset + 1];\n\t\tconst hostInfo = HostInfo.fromBuffer(buffer, offset + 2);\n\n\t\treturn new ConnectionResponse(channel, status, hostInfo);\n\t}\n\n\t/**\n\t * @param {number}   channel  - Channel\n\t * @param {number}   status   - Connection status\n\t * @param {HostInfo} hostInfo - Host information\n\t */\n\tconstructor(channel, status, hostInfo) {\n\t\tthis.channel = channel;\n\t\tthis.status = status;\n\t\tthis.hostInfo = hostInfo;\n\t}\n}\n\nmodule.exports = {\n\tfromPacket,\n\ttoPacket,\n\n\tPacket,\n\n\tConnectionRequest,\n\tConnectionResponse,\n\n\tHostInfo\n};\n",
     "static": true,
     "longname": "lib/index.js",
     "access": null,
@@ -149,6 +149,197 @@
   {
     "__docId__": 4,
     "kind": "class",
+    "name": "Packet",
+    "memberof": "lib/index.js",
+    "static": true,
+    "longname": "lib/index.js~Packet",
+    "access": null,
+    "export": false,
+    "importPath": "knxproto",
+    "importStyle": null,
+    "description": "KNXnet/IP packet\n\nRepresents an entire packet, which is structured as follows:\n\n| Octet | Field                   | Description                                               |\n|------:|:------------------------|:----------------------------------------------------------|\n|     0 | Header structure length | Always 6                                                  |\n|     1 | Protocol version        | Always 16                                                 |\n| 2 - 3 | Service identifier      | Describes which kind of payload you can expect            |\n| 4 - 5 | Entire packet length    | Length of the entire packet, including header and payload |\n| 6 - n | Payload                 | Contains the payload that matches the services identifier |",
+    "lineNumber": 72,
+    "interface": false
+  },
+  {
+    "__docId__": 5,
+    "kind": "method",
+    "name": "fromBuffer",
+    "memberof": "lib/index.js~Packet",
+    "generator": false,
+    "async": false,
+    "static": true,
+    "longname": "lib/index.js~Packet.fromBuffer",
+    "access": null,
+    "description": "Extract a KNXnet/IP packet from the given buffer.",
+    "lineNumber": 81,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{Packet}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "Buffer"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "buffer",
+        "description": "Input buffer"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": true,
+        "defaultValue": "0",
+        "defaultRaw": 0,
+        "name": "offset",
+        "description": "Input offset"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "Packet"
+      ],
+      "spread": false,
+      "description": ""
+    },
+    "throws": [
+      {
+        "types": [
+          "Error"
+        ],
+        "description": "If given buffer is too small or its contents are invalid"
+      }
+    ]
+  },
+  {
+    "__docId__": 6,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "lib/index.js~Packet",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "lib/index.js~Packet#constructor",
+    "access": null,
+    "description": "",
+    "lineNumber": 103,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "service",
+        "description": "Service identifier"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "Object"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "payload",
+        "description": "Packet payload"
+      }
+    ]
+  },
+  {
+    "__docId__": 7,
+    "kind": "member",
+    "name": "payload",
+    "memberof": "lib/index.js~Packet",
+    "static": false,
+    "longname": "lib/index.js~Packet#payload",
+    "access": null,
+    "description": null,
+    "lineNumber": 104,
+    "undocument": true,
+    "unknown": [
+      {
+        "tagName": "@_undocument",
+        "tagValue": ""
+      }
+    ],
+    "type": {
+      "types": [
+        "*"
+      ]
+    }
+  },
+  {
+    "__docId__": 8,
+    "kind": "method",
+    "name": "toBuffer",
+    "memberof": "lib/index.js~Packet",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "lib/index.js~Packet#toBuffer",
+    "access": null,
+    "description": "Write KNXnet/IP packet including its payload to the given buffer.",
+    "lineNumber": 115,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{Buffer}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": true,
+        "types": [
+          "Buffer"
+        ],
+        "spread": false,
+        "optional": true,
+        "name": "buffer",
+        "description": "Output buffer (allocates an appropriate buffer when omitted)"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": true,
+        "defaultValue": "0",
+        "defaultRaw": 0,
+        "name": "offset",
+        "description": "Output offset"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "Buffer"
+      ],
+      "spread": false,
+      "description": ""
+    },
+    "throws": [
+      {
+        "types": [
+          "Error"
+        ],
+        "description": "If payload is too large or the given buffer is too small"
+      }
+    ]
+  },
+  {
+    "__docId__": 9,
+    "kind": "class",
     "name": "HostInfo",
     "memberof": "lib/index.js",
     "static": true,
@@ -158,11 +349,11 @@
     "importPath": "knxproto",
     "importStyle": null,
     "description": "Host information\n\nRepresents the `Host Protocol Address Information`, which is structured as follows:\n\n| Octet | Field            | Description                    |\n|------:|:-----------------|:-------------------------------|\n|     0 | Structure length | Always 8                       |\n|     1 | Protocol         | 1 is UDP, 2 is TCP             |\n| 2 - 5 | IPv4 address     | Network-ordered representation |\n| 6 - 7 | Port number      | Network-ordered representation |",
-    "lineNumber": 71,
+    "lineNumber": 151,
     "interface": false
   },
   {
-    "__docId__": 5,
+    "__docId__": 10,
     "kind": "get",
     "name": "UDP",
     "memberof": "lib/index.js~HostInfo",
@@ -172,7 +363,7 @@
     "longname": "lib/index.js~HostInfo.UDP",
     "access": null,
     "description": "UDP protocol identifier",
-    "lineNumber": 75,
+    "lineNumber": 155,
     "type": {
       "types": [
         "number"
@@ -180,7 +371,7 @@
     }
   },
   {
-    "__docId__": 6,
+    "__docId__": 11,
     "kind": "get",
     "name": "TCP",
     "memberof": "lib/index.js~HostInfo",
@@ -190,7 +381,7 @@
     "longname": "lib/index.js~HostInfo.TCP",
     "access": null,
     "description": "TCP protocol identifier",
-    "lineNumber": 80,
+    "lineNumber": 160,
     "type": {
       "types": [
         "number"
@@ -198,7 +389,7 @@
     }
   },
   {
-    "__docId__": 7,
+    "__docId__": 12,
     "kind": "method",
     "name": "fromBuffer",
     "memberof": "lib/index.js~HostInfo",
@@ -208,7 +399,7 @@
     "longname": "lib/index.js~HostInfo.fromBuffer",
     "access": null,
     "description": "Extract a {@link HostInfo} instance from the given buffer and offset.",
-    "lineNumber": 90,
+    "lineNumber": 170,
     "params": [
       {
         "nullable": null,
@@ -251,7 +442,7 @@
     ]
   },
   {
-    "__docId__": 8,
+    "__docId__": 13,
     "kind": "constructor",
     "name": "constructor",
     "memberof": "lib/index.js~HostInfo",
@@ -261,7 +452,7 @@
     "longname": "lib/index.js~HostInfo#constructor",
     "access": null,
     "description": "",
-    "lineNumber": 114,
+    "lineNumber": 194,
     "params": [
       {
         "nullable": null,
@@ -311,7 +502,7 @@
     ]
   },
   {
-    "__docId__": 9,
+    "__docId__": 14,
     "kind": "member",
     "name": "protocol",
     "memberof": "lib/index.js~HostInfo",
@@ -319,7 +510,7 @@
     "longname": "lib/index.js~HostInfo#protocol",
     "access": null,
     "description": null,
-    "lineNumber": 115,
+    "lineNumber": 195,
     "undocument": true,
     "unknown": [
       {
@@ -334,7 +525,7 @@
     }
   },
   {
-    "__docId__": 10,
+    "__docId__": 15,
     "kind": "member",
     "name": "port",
     "memberof": "lib/index.js~HostInfo",
@@ -342,7 +533,7 @@
     "longname": "lib/index.js~HostInfo#port",
     "access": null,
     "description": null,
-    "lineNumber": 116,
+    "lineNumber": 196,
     "undocument": true,
     "unknown": [
       {
@@ -357,7 +548,7 @@
     }
   },
   {
-    "__docId__": 11,
+    "__docId__": 16,
     "kind": "member",
     "name": "address",
     "memberof": "lib/index.js~HostInfo",
@@ -365,7 +556,7 @@
     "longname": "lib/index.js~HostInfo#address",
     "access": null,
     "description": null,
-    "lineNumber": 121,
+    "lineNumber": 201,
     "undocument": true,
     "unknown": [
       {
@@ -380,7 +571,7 @@
     }
   },
   {
-    "__docId__": 12,
+    "__docId__": 17,
     "kind": "member",
     "name": "address",
     "memberof": "lib/index.js~HostInfo",
@@ -388,7 +579,7 @@
     "longname": "lib/index.js~HostInfo#address",
     "access": null,
     "description": null,
-    "lineNumber": 128,
+    "lineNumber": 208,
     "undocument": true,
     "unknown": [
       {
@@ -403,7 +594,7 @@
     }
   },
   {
-    "__docId__": 13,
+    "__docId__": 18,
     "kind": "member",
     "name": "address",
     "memberof": "lib/index.js~HostInfo",
@@ -411,7 +602,7 @@
     "longname": "lib/index.js~HostInfo#address",
     "access": null,
     "description": null,
-    "lineNumber": 132,
+    "lineNumber": 212,
     "undocument": true,
     "unknown": [
       {
@@ -426,7 +617,7 @@
     }
   },
   {
-    "__docId__": 14,
+    "__docId__": 19,
     "kind": "method",
     "name": "toBuffer",
     "memberof": "lib/index.js~HostInfo",
@@ -436,7 +627,7 @@
     "longname": "lib/index.js~HostInfo#toBuffer",
     "access": null,
     "description": "Write {@link HostInfo} structure to the given buffer.",
-    "lineNumber": 144,
+    "lineNumber": 225,
     "unknown": [
       {
         "tagName": "@returns",
@@ -452,7 +643,7 @@
         "spread": false,
         "optional": true,
         "name": "buffer",
-        "description": "Output buffer (allocates an appropriate buffer when ommited)"
+        "description": "Output buffer (allocates an appropriate buffer when omitted)"
       },
       {
         "nullable": null,
@@ -474,10 +665,18 @@
       ],
       "spread": false,
       "description": ""
-    }
+    },
+    "throws": [
+      {
+        "types": [
+          "Error"
+        ],
+        "description": "If given buffer is too small"
+      }
+    ]
   },
   {
-    "__docId__": 15,
+    "__docId__": 20,
     "kind": "method",
     "name": "equals",
     "memberof": "lib/index.js~HostInfo",
@@ -487,7 +686,7 @@
     "longname": "lib/index.js~HostInfo#equals",
     "access": null,
     "description": "Check if another {@link HostInfo} is equal to this one.",
-    "lineNumber": 163,
+    "lineNumber": 246,
     "unknown": [
       {
         "tagName": "@returns",
@@ -516,7 +715,377 @@
     }
   },
   {
-    "__docId__": 17,
+    "__docId__": 21,
+    "kind": "class",
+    "name": "ConnectionRequest",
+    "memberof": "lib/index.js",
+    "static": true,
+    "longname": "lib/index.js~ConnectionRequest",
+    "access": null,
+    "export": false,
+    "importPath": "knxproto",
+    "importStyle": null,
+    "description": "Connection request",
+    "lineNumber": 264,
+    "interface": false
+  },
+  {
+    "__docId__": 22,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "lib/index.js~ConnectionRequest",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "lib/index.js~ConnectionRequest#constructor",
+    "access": null,
+    "description": "",
+    "lineNumber": 269,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "HostInfo"
+        ],
+        "spread": false,
+        "optional": true,
+        "name": "control",
+        "description": "Control host information"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "HostInfo"
+        ],
+        "spread": false,
+        "optional": true,
+        "name": "tunnel",
+        "description": "Tunnel host information"
+      }
+    ]
+  },
+  {
+    "__docId__": 23,
+    "kind": "member",
+    "name": "control",
+    "memberof": "lib/index.js~ConnectionRequest",
+    "static": false,
+    "longname": "lib/index.js~ConnectionRequest#control",
+    "access": null,
+    "description": null,
+    "lineNumber": 270,
+    "undocument": true,
+    "unknown": [
+      {
+        "tagName": "@_undocument",
+        "tagValue": ""
+      }
+    ],
+    "type": {
+      "types": [
+        "*"
+      ]
+    }
+  },
+  {
+    "__docId__": 24,
+    "kind": "member",
+    "name": "tunnel",
+    "memberof": "lib/index.js~ConnectionRequest",
+    "static": false,
+    "longname": "lib/index.js~ConnectionRequest#tunnel",
+    "access": null,
+    "description": null,
+    "lineNumber": 271,
+    "undocument": true,
+    "unknown": [
+      {
+        "tagName": "@_undocument",
+        "tagValue": ""
+      }
+    ],
+    "type": {
+      "types": [
+        "*"
+      ]
+    }
+  },
+  {
+    "__docId__": 25,
+    "kind": "method",
+    "name": "toBuffer",
+    "memberof": "lib/index.js~ConnectionRequest",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "lib/index.js~ConnectionRequest#toBuffer",
+    "access": null,
+    "description": "Write {@link ConnectionRequest} structure to the given buffer.",
+    "lineNumber": 282,
+    "unknown": [
+      {
+        "tagName": "@returns",
+        "tagValue": "{Buffer}"
+      }
+    ],
+    "params": [
+      {
+        "nullable": true,
+        "types": [
+          "Buffer"
+        ],
+        "spread": false,
+        "optional": true,
+        "name": "buffer",
+        "description": "Output buffer (allocates an appropriate buffer when omitted)"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": true,
+        "defaultValue": "0",
+        "defaultRaw": 0,
+        "name": "offset",
+        "description": "Output offset"
+      }
+    ],
+    "return": {
+      "nullable": null,
+      "types": [
+        "Buffer"
+      ],
+      "spread": false,
+      "description": ""
+    },
+    "throws": [
+      {
+        "types": [
+          "Error"
+        ],
+        "description": "If given buffer is too small"
+      }
+    ]
+  },
+  {
+    "__docId__": 26,
+    "kind": "get",
+    "name": "bufferSize",
+    "memberof": "lib/index.js~ConnectionRequest",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "lib/index.js~ConnectionRequest#bufferSize",
+    "access": null,
+    "description": "Minimum number of bytes required to serialize a connection request",
+    "lineNumber": 303,
+    "type": {
+      "types": [
+        "number"
+      ]
+    }
+  },
+  {
+    "__docId__": 27,
+    "kind": "get",
+    "name": "service",
+    "memberof": "lib/index.js~ConnectionRequest",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "lib/index.js~ConnectionRequest#service",
+    "access": null,
+    "description": "Service identifier",
+    "lineNumber": 310,
+    "type": {
+      "types": [
+        "number"
+      ]
+    }
+  },
+  {
+    "__docId__": 28,
+    "kind": "class",
+    "name": "ConnectionResponse",
+    "memberof": "lib/index.js",
+    "static": true,
+    "longname": "lib/index.js~ConnectionResponse",
+    "access": null,
+    "export": false,
+    "importPath": "knxproto",
+    "importStyle": null,
+    "description": "Connection response",
+    "lineNumber": 318,
+    "interface": false
+  },
+  {
+    "__docId__": 29,
+    "kind": "method",
+    "name": "fromBuffer",
+    "memberof": "lib/index.js~ConnectionResponse",
+    "generator": false,
+    "async": false,
+    "static": true,
+    "longname": "lib/index.js~ConnectionResponse.fromBuffer",
+    "access": null,
+    "description": "Extract a {@link ConnectionResponse} from the given buffer.",
+    "lineNumber": 326,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "Buffer"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "buffer",
+        "description": "Input buffer"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": true,
+        "defaultValue": "0",
+        "defaultRaw": 0,
+        "name": "offset",
+        "description": "Input offset"
+      }
+    ],
+    "return": {
+      "types": [
+        "*"
+      ]
+    },
+    "throws": [
+      {
+        "types": [
+          "Error"
+        ],
+        "description": "If buffer content is invalid"
+      }
+    ]
+  },
+  {
+    "__docId__": 30,
+    "kind": "constructor",
+    "name": "constructor",
+    "memberof": "lib/index.js~ConnectionResponse",
+    "generator": false,
+    "async": false,
+    "static": false,
+    "longname": "lib/index.js~ConnectionResponse#constructor",
+    "access": null,
+    "description": "",
+    "lineNumber": 342,
+    "params": [
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "channel",
+        "description": "Channel"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "number"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "status",
+        "description": "Connection status"
+      },
+      {
+        "nullable": null,
+        "types": [
+          "HostInfo"
+        ],
+        "spread": false,
+        "optional": false,
+        "name": "hostInfo",
+        "description": "Host information"
+      }
+    ]
+  },
+  {
+    "__docId__": 31,
+    "kind": "member",
+    "name": "channel",
+    "memberof": "lib/index.js~ConnectionResponse",
+    "static": false,
+    "longname": "lib/index.js~ConnectionResponse#channel",
+    "access": null,
+    "description": null,
+    "lineNumber": 343,
+    "undocument": true,
+    "unknown": [
+      {
+        "tagName": "@_undocument",
+        "tagValue": ""
+      }
+    ],
+    "type": {
+      "types": [
+        "*"
+      ]
+    }
+  },
+  {
+    "__docId__": 32,
+    "kind": "member",
+    "name": "status",
+    "memberof": "lib/index.js~ConnectionResponse",
+    "static": false,
+    "longname": "lib/index.js~ConnectionResponse#status",
+    "access": null,
+    "description": null,
+    "lineNumber": 344,
+    "undocument": true,
+    "unknown": [
+      {
+        "tagName": "@_undocument",
+        "tagValue": ""
+      }
+    ],
+    "type": {
+      "types": [
+        "*"
+      ]
+    }
+  },
+  {
+    "__docId__": 33,
+    "kind": "member",
+    "name": "hostInfo",
+    "memberof": "lib/index.js~ConnectionResponse",
+    "static": false,
+    "longname": "lib/index.js~ConnectionResponse#hostInfo",
+    "access": null,
+    "description": null,
+    "lineNumber": 345,
+    "undocument": true,
+    "unknown": [
+      {
+        "tagName": "@_undocument",
+        "tagValue": ""
+      }
+    ],
+    "type": {
+      "types": [
+        "*"
+      ]
+    }
+  },
+  {
+    "__docId__": 35,
     "kind": "external",
     "name": "Infinity",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Infinity",
@@ -528,7 +1097,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 18,
+    "__docId__": 36,
     "kind": "external",
     "name": "NaN",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/NaN",
@@ -540,7 +1109,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 19,
+    "__docId__": 37,
     "kind": "external",
     "name": "undefined",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/undefined",
@@ -552,7 +1121,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 20,
+    "__docId__": 38,
     "kind": "external",
     "name": "null",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/null",
@@ -564,7 +1133,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 21,
+    "__docId__": 39,
     "kind": "external",
     "name": "Object",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object",
@@ -576,7 +1145,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 22,
+    "__docId__": 40,
     "kind": "external",
     "name": "object",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object",
@@ -588,7 +1157,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 23,
+    "__docId__": 41,
     "kind": "external",
     "name": "Function",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function",
@@ -600,7 +1169,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 24,
+    "__docId__": 42,
     "kind": "external",
     "name": "function",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function",
@@ -612,7 +1181,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 25,
+    "__docId__": 43,
     "kind": "external",
     "name": "Boolean",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean",
@@ -624,7 +1193,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 26,
+    "__docId__": 44,
     "kind": "external",
     "name": "boolean",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Boolean",
@@ -636,7 +1205,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 27,
+    "__docId__": 45,
     "kind": "external",
     "name": "Symbol",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol",
@@ -648,7 +1217,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 28,
+    "__docId__": 46,
     "kind": "external",
     "name": "Error",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error",
@@ -660,7 +1229,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 29,
+    "__docId__": 47,
     "kind": "external",
     "name": "EvalError",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/EvalError",
@@ -672,7 +1241,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 30,
+    "__docId__": 48,
     "kind": "external",
     "name": "InternalError",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/InternalError",
@@ -684,7 +1253,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 31,
+    "__docId__": 49,
     "kind": "external",
     "name": "RangeError",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RangeError",
@@ -696,7 +1265,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 32,
+    "__docId__": 50,
     "kind": "external",
     "name": "ReferenceError",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/ReferenceError",
@@ -708,7 +1277,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 33,
+    "__docId__": 51,
     "kind": "external",
     "name": "SyntaxError",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SyntaxError",
@@ -720,7 +1289,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 34,
+    "__docId__": 52,
     "kind": "external",
     "name": "TypeError",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypeError",
@@ -732,7 +1301,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 35,
+    "__docId__": 53,
     "kind": "external",
     "name": "URIError",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/URIError",
@@ -744,7 +1313,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 36,
+    "__docId__": 54,
     "kind": "external",
     "name": "Number",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number",
@@ -756,7 +1325,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 37,
+    "__docId__": 55,
     "kind": "external",
     "name": "number",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Number",
@@ -768,7 +1337,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 38,
+    "__docId__": 56,
     "kind": "external",
     "name": "Date",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date",
@@ -780,7 +1349,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 39,
+    "__docId__": 57,
     "kind": "external",
     "name": "String",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String",
@@ -792,7 +1361,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 40,
+    "__docId__": 58,
     "kind": "external",
     "name": "string",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String",
@@ -804,7 +1373,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 41,
+    "__docId__": 59,
     "kind": "external",
     "name": "RegExp",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp",
@@ -816,7 +1385,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 42,
+    "__docId__": 60,
     "kind": "external",
     "name": "Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array",
@@ -828,7 +1397,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 43,
+    "__docId__": 61,
     "kind": "external",
     "name": "Int8Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Int8Array",
@@ -840,7 +1409,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 44,
+    "__docId__": 62,
     "kind": "external",
     "name": "Uint8Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array",
@@ -852,7 +1421,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 45,
+    "__docId__": 63,
     "kind": "external",
     "name": "Uint8ClampedArray",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8ClampedArray",
@@ -864,7 +1433,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 46,
+    "__docId__": 64,
     "kind": "external",
     "name": "Int16Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Int16Array",
@@ -876,7 +1445,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 47,
+    "__docId__": 65,
     "kind": "external",
     "name": "Uint16Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint16Array",
@@ -888,7 +1457,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 48,
+    "__docId__": 66,
     "kind": "external",
     "name": "Int32Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Int32Array",
@@ -900,7 +1469,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 49,
+    "__docId__": 67,
     "kind": "external",
     "name": "Uint32Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint32Array",
@@ -912,7 +1481,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 50,
+    "__docId__": 68,
     "kind": "external",
     "name": "Float32Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Float32Array",
@@ -924,7 +1493,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 51,
+    "__docId__": 69,
     "kind": "external",
     "name": "Float64Array",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Float64Array",
@@ -936,7 +1505,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 52,
+    "__docId__": 70,
     "kind": "external",
     "name": "Map",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map",
@@ -948,7 +1517,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 53,
+    "__docId__": 71,
     "kind": "external",
     "name": "Set",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set",
@@ -960,7 +1529,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 54,
+    "__docId__": 72,
     "kind": "external",
     "name": "WeakMap",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap",
@@ -972,7 +1541,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 55,
+    "__docId__": 73,
     "kind": "external",
     "name": "WeakSet",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakSet",
@@ -984,7 +1553,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 56,
+    "__docId__": 74,
     "kind": "external",
     "name": "ArrayBuffer",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer",
@@ -996,7 +1565,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 57,
+    "__docId__": 75,
     "kind": "external",
     "name": "DataView",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/DataView",
@@ -1008,7 +1577,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 58,
+    "__docId__": 76,
     "kind": "external",
     "name": "JSON",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON",
@@ -1020,7 +1589,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 59,
+    "__docId__": 77,
     "kind": "external",
     "name": "Promise",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise",
@@ -1032,7 +1601,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 60,
+    "__docId__": 78,
     "kind": "external",
     "name": "Generator",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Generator",
@@ -1044,7 +1613,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 61,
+    "__docId__": 79,
     "kind": "external",
     "name": "GeneratorFunction",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/GeneratorFunction",
@@ -1056,7 +1625,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 62,
+    "__docId__": 80,
     "kind": "external",
     "name": "Reflect",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Reflect",
@@ -1068,7 +1637,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 63,
+    "__docId__": 81,
     "kind": "external",
     "name": "Proxy",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy",
@@ -1081,7 +1650,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 65,
+    "__docId__": 83,
     "kind": "external",
     "name": "CanvasRenderingContext2D",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D",
@@ -1093,7 +1662,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 66,
+    "__docId__": 84,
     "kind": "external",
     "name": "DocumentFragment",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/API/DocumentFragment",
@@ -1105,7 +1674,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 67,
+    "__docId__": 85,
     "kind": "external",
     "name": "Element",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/API/Element",
@@ -1117,7 +1686,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 68,
+    "__docId__": 86,
     "kind": "external",
     "name": "Event",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/API/Event",
@@ -1129,7 +1698,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 69,
+    "__docId__": 87,
     "kind": "external",
     "name": "Node",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/API/Node",
@@ -1141,7 +1710,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 70,
+    "__docId__": 88,
     "kind": "external",
     "name": "NodeList",
     "externalLink": "https://developer.mozilla.org/en-US/docs/Web/API/NodeList",
@@ -1153,7 +1722,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 71,
+    "__docId__": 89,
     "kind": "external",
     "name": "XMLHttpRequest",
     "externalLink": "https://developer.mozilla.org/en/docs/Web/API/XMLHttpRequest",
@@ -1165,7 +1734,7 @@
     "builtinExternal": true
   },
   {
-    "__docId__": 72,
+    "__docId__": 90,
     "kind": "external",
     "name": "AudioContext",
     "externalLink": "https://developer.mozilla.org/en/docs/Web/API/AudioContext",
