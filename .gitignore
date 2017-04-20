@@ -1,3 +1,7 @@
 # Node Dependencies
 node_modules/
 test.js
+
+# Documentation
+docs/
+!docs/custom-style.css
